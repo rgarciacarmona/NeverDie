@@ -32,7 +32,7 @@ class GameMap:
             y = randint(0, map_height - h - 1)
             # Create the room
             new_room = Rect(x, y, w, h)
-            # Discard the room if interects with other rooms
+            # Discard the room if intersects with other rooms
             for other_room in rooms:
                 if new_room.intersect(other_room):
                     break
