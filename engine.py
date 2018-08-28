@@ -1,7 +1,8 @@
 import libtcodpy as libtcod
 
-from entity import Entity
+from entity import Entity, get_blocking_entities_at_location
 from fov_functions import initialize_fov, recompute_fov
+from game_states import GameStates
 from input_handlers import handle_keys
 from map_objects.game_map import GameMap
 from render_functions import clear_all, render_all
@@ -16,6 +17,7 @@ def main():
     max_rooms = 30
     room_min_size = 6
     room_max_size = 10
+    max_monsters_per_room = 3
     # Field of view parameters
     fov_algorithm = 0
     fov_light_walls = True
@@ -30,11 +32,10 @@ def main():
 
     # Player data, a white @ in the middle of the screen
     # Position needs to be forcefully cast to int
-    player = Entity(int(screen_width / 2), int(screen_height / 2), '@', libtcod.white)
-    # Other entities
-    npc = Entity(int(screen_width / 2 - 5), int(screen_height / 2), '@', libtcod.yellow)
+    player = Entity(int(screen_width / 2), int(screen_height / 2), '@',
+        libtcod.white, 'Player', blocks=True)
     # Entity array
-    entities = [npc, player]
+    entities = [player]
 
     # Loads greyscale TCOD-mapping Arial 10x10 font
     libtcod.console_set_custom_font('arial10x10.png',
@@ -47,7 +48,8 @@ def main():
     # Initialize the map
     game_map = GameMap(map_width, map_height)
     game_map.make_map(max_rooms, room_min_size, room_max_size,
-                      map_width, map_height, player)
+                      map_width, map_height, player, entities,
+                      max_monsters_per_room)
 
     # Variable to recompute FOV
     fov_recompute = True
@@ -57,6 +59,9 @@ def main():
     # Store keyboard and mouse input
     key = libtcod.Key()
     mouse = libtcod.Mouse()
+
+    # Initiatlize the game state
+    game_state = GameStates.PLAYER_TURN
 
     # Main game loop
     while not libtcod.console_is_window_closed():
@@ -89,14 +94,37 @@ def main():
         move = action.get('move')
         exit = action.get('exit')
         fullscreen = action.get('fullscreen')
-        # If "move", moves the player
-        if move:
+
+        # If "move" and is the player's turn, moves the player
+        if move and game_state == GameStates.PLAYER_TURN:
             dx, dy = move
-            # Check if the space is blocked before moving
-            if not game_map.is_blocked(player.x + dx, player.y + dy):
-                player.move(dx, dy)
-                # Recompute FOV after moving
-                fov_recompute = True
+            destination_x = player.x + dx
+            destination_y = player.y + dy
+            # Check if the space is blocked by a wall before moving
+            if not game_map.is_blocked(destination_x, destination_y):
+                # And if it's blocked by an entity
+                target = get_blocking_entities_at_location(entities,
+                    destination_x, destination_y)
+                if target:
+                    print('You kick the ' + target.name + ' in the shins, ' +
+                        'much to its annoyance!')
+                else:
+                    player.move(dx, dy)
+                    # Recompute FOV after moving
+                    fov_recompute = True
+                # Change to enemy's turn
+                game_state = GameStates.ENEMY_TURN
+
+        # If it's the enemy's turn, move the enemies
+        if game_state == GameStates.ENEMY_TURN:
+            # Every monster does nothing
+            for entity in entities:
+                if entity != player:
+                    print('The ' + entity.name + ' ponders the meaning of ' +
+                        'its existence.')
+            # Change to player's turn
+            game_state = GameStates.PLAYER_TURN
+
         if exit:
             return True
         # If "fullscreen"", toggles fullscreen
